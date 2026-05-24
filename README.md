@@ -120,7 +120,7 @@ The classifier overhead is constant regardless of LLM size.
 
 ### End-to-End: SmolLM2-360M
 
-Small and fast. Good baseline for throughput.
+Small but fast. Good baseline for throughput.
 
 | Path | Classifier | LLM | Total | Tokens |
 |------|----------:|----:|------:|-------:|
@@ -130,22 +130,22 @@ Small and fast. Good baseline for throughput.
 - Classifier: 2.5% of total latency
 - Saved vs always-reason: 2.6s per direct prompt
 
-### End-to-End: Qwen3.5-9B
+### End-to-End: Gemma 4 E4B
 
-Larger model. Qwen is very verbose in reasoning, even when unnecessary.
+Mid-size model. Follows system prompts reliably. Direct prompts stay short.
 
 | Path | Classifier | LLM | Total | Tokens |
 |------|----------:|----:|------:|-------:|
-| Direct | 3.7ms | 27.2s | **27.2s** | 262 |
-| Reasoning | 3.7ms | 45.6s | **45.6s** | 789 |
+| Direct | 3.7ms | 0.2s | **0.2s** | 17 |
+| Reasoning | 3.7ms | 5.8s | **5.8s** | 512 |
 
-- Classifier: **0.01%** of total latency (one ten-thousandth)
-- Saved vs always-reason: **18.5s** per direct prompt
+- Classifier: **1.8%** of total latency
+- Saved vs always-reason: **5.6s** per direct prompt
 - Router accuracy on 10 test prompts: **10/10**
 
 ### Key Takeaway
 
-For small models the router is nice. For large verbose models it's essential — it saves 18 seconds per prompt that doesn't need reasoning, and the overhead is only 0.01% of response time.
+The router saves 3–6 seconds per direct prompt. On models that follow instructions well (Gemma, Llama, SmolLM), the classifier overhead is under 2% of total latency.
 
 ## Costs
 
@@ -155,9 +155,11 @@ Prompt labeling took about 3.8$ in deepseek-v4-flash API credits.
 
 - **Binary only.** This model outputs 0 or 1 — it cannot express "context-dependent" (class 2). The 3-class model (`train/train_router_3class.py`) addresses this.
 
-- **No conversation history.** The classifier sees only the current prompt, not prior messages. Multi-turn cues ("no, change that to use a list") are judged on the prompt text alone. Words like "fix" or "explain" trigger reasoning regardless of context — usually what you want, but not always.
+- **No conversation history.** The classifier sees only the current prompt, not prior messages.
 
-- **Embedding model quality.** The router is only as good as the embeddings. gte-small (384-dim) works well for English; multilingual prompts may degrade. Upgrading to a larger embedding model (gte-base, 768-dim) would improve accuracy at the cost of ~2-3x latency.
+- **Qwen 3.5 ignores system prompts via llama.cpp.** Qwen's chat template wraps all output in `<think>` tags regardless of the system prompt. This makes the router ineffective — disabling thinking (`--reasoning off`) globally kills it for reasoning prompts too. Use Gemma or Llama-based models instead.
+
+- **Embedding model quality.** The router is only as good as the embeddings. gte-small (384-dim) works well for English; multilingual prompts may degrade.
 
 - **Single-region training data.** Trained on a subset of WildChat-4.8M, a dataset of chatbot conversations. Retrain with `train/deepseek_classify_prompt.py` on your own data. 
 

@@ -153,6 +153,19 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     break
 
     def do_POST(self):
+        try:
+            self._do_post()
+        except Exception as e:
+            self.send_response(500)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(f"Proxy error: {e}".encode())
+            if self.verbose:
+                import traceback
+                traceback.print_exc()
+
+    def _do_post(self):
+    def _do_post(self):
         if self.path != "/v1/chat/completions":
             self._proxy_get("POST", self.path, self._read_body())
             return
