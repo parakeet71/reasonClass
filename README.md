@@ -106,7 +106,7 @@ Trained on 24K DeepSeek-v4-flash-labeled prompts with gte-small embeddings.
 
 ## Benchmarks
 
-Measured on AMD Radeon RX 9070 XT (ROCm). All GPU-accelerated.
+Measured on AMD Radeon RX 9070 XT (llama.cpp + ROCm).
 
 ### Classifier Latency (200 samples)
 
@@ -120,7 +120,7 @@ The classifier overhead is constant regardless of LLM size.
 
 ### End-to-End: SmolLM2-360M
 
-Small but fast. Good baseline for throughput.
+Small and fast. Good baseline for throughput.
 
 | Path | Classifier | LLM | Total | Tokens |
 |------|----------:|----:|------:|-------:|
@@ -132,7 +132,7 @@ Small but fast. Good baseline for throughput.
 
 ### End-to-End: Qwen3.5-9B
 
-Larger model. Qwen is notoriously verbose — it thinks out loud even when told not to.
+Larger model. Qwen is very verbose in reasoning, even when unnecessary.
 
 | Path | Classifier | LLM | Total | Tokens |
 |------|----------:|----:|------:|-------:|
@@ -147,6 +147,10 @@ Larger model. Qwen is notoriously verbose — it thinks out loud even when told 
 
 For small models the router is nice. For large verbose models it's essential — it saves 18 seconds per prompt that doesn't need reasoning, and the overhead is only 0.01% of response time.
 
+## Costs
+
+Prompt labeling took about 3.8$ in deepseek-v4-flash API credits. 
+
 ## Limitations
 
 - **Binary only.** This model outputs 0 or 1 — it cannot express "context-dependent" (class 2). The 3-class model (`train/train_router_3class.py`) addresses this.
@@ -155,7 +159,7 @@ For small models the router is nice. For large verbose models it's essential —
 
 - **Embedding model quality.** The router is only as good as the embeddings. gte-small (384-dim) works well for English; multilingual prompts may degrade. Upgrading to a larger embedding model (gte-base, 768-dim) would improve accuracy at the cost of ~2-3x latency.
 
-- **Single-region training data.** Trained on WildChat, a dataset of chatbot conversations. Retrain with `train/deepseek_classify_prompt.py` on your own data.
+- **Single-region training data.** Trained on a subset of WildChat-4.8M, a dataset of chatbot conversations. Retrain with `train/deepseek_classify_prompt.py` on your own data. 
 
 ## Requirements
 
