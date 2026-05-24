@@ -165,7 +165,6 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 traceback.print_exc()
 
     def _do_post(self):
-    def _do_post(self):
         if self.path != "/v1/chat/completions":
             self._proxy_get("POST", self.path, self._read_body())
             return
