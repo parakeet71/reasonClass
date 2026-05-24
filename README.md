@@ -132,7 +132,7 @@ Small but fast. Good baseline for throughput.
 
 ### End-to-End: Gemma 4 E4B
 
-Mid-size model. Follows system prompts reliably. Direct prompts stay short.
+Mid-size model. Direct prompts stay short.
 
 | Path | Classifier | LLM | Total | Tokens |
 |------|----------:|----:|------:|-------:|
@@ -161,7 +161,9 @@ Prompt labeling took about 3.8$ in deepseek-v4-flash API credits.
 
 - **Embedding model quality.** The router is only as good as the embeddings. gte-small (384-dim) works well for English; multilingual prompts may degrade.
 
-- **Single-region training data.** Trained on a subset of WildChat-4.8M, a dataset of chatbot conversations. Retrain with `train/deepseek_classify_prompt.py` on your own data. 
+- **Single-region training data.** Trained on a subset of WildChat-4.8M, a dataset of chatbot conversations. Retrain with `train/deepseek_classify_prompt.py` on your own data.
+
+- **Keyword bias.** Prompts containing the words "reason" or "reasoning" score artificially high (>0.8) regardless of actual difficulty — e.g. "What is reasoning?" (a simple definition) scores 0.94. This is an artifact of the training data where those tokens appear frequently in reasoning-labeled prompts.
 
 ## Requirements
 
