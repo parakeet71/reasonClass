@@ -1,6 +1,35 @@
 # Reason-Class Router
 
-Classify whether a prompt needs LLM reasoning. Routes to direct or reasoning model.
+A 368K-param neural network that predicts whether a prompt needs LLM reasoning before routing it to the appropriate model. 3.7ms overhead, 96.7% accuracy, saves 3–6 seconds per direct prompt.
+
+
+### How It Works
+
+The router sits between the user and the LLM. It takes a prompt, embeds it with [gte-small](https://huggingface.co/thenlper/gte-small) (a 384-dim sentence transformer), runs it through a tiny MLP, and outputs a score from 0 to 1. Prompts scoring below 0.5 go to a fast/direct model. Prompts above 0.5 go to a reasoning model.
+
+```
+User prompt → gte-small embedding (3.3ms) → RouterMLP (0.4ms) → Decision
+                                                              ├── < 0.50 → "Answer directly"
+                                                              └── ≥ 0.50 → "Think step by step"
+```
+
+The classifier is a 3-layer residual MLP with 368K parameters. It runs on CPU in under 4ms. The embedding model is the bottleneck at 3.3ms. Together they add ~3.7ms to every request — invisible next to LLM response times (0.1s–45s).
+
+### Three-Class Taxonomy
+
+The router was trained to distinguish three prompt categories:
+
+| Class | Label | Meaning | Example |
+|:-----:|-------|---------|---------|
+| 0 | **Direct** | Self-contained, needs minimal reasoning | "What is the capital of France?" |
+| 1 | **Reasoning** | Self-contained, needs significant reasoning | "Debug this race condition in Go" |
+| 2 | **Context** | Depends on prior conversation | "using the code above, add error handling" |
+
+The shipping model is binary (0 vs 1). A 3-class model is available in `train/train_router_3class.py`.
+
+### Training Data
+
+The classifier was trained on 24,019 prompts from [WildChat](https://wildchat.allen.ai/), labeled by [DeepSeek-v4-flash](https://api-docs.deepseek.com/) with `reasoning_effort=high`. Labeling cost approximately $3.80 in API credits(deepseek-v4-flash). The full 30K labeled dataset is included in `train/data/`.
 
 ## Quick Start
 
@@ -8,14 +37,6 @@ Classify whether a prompt needs LLM reasoning. Routes to direct or reasoning mod
 pip install torch numpy optimum[onnxruntime] transformers requests python-dotenv
 
 python router_service.py --prompt "Debug this race condition in my Go code"
-```
-
-### How it works
-
-```
-Prompt → gte-small ONNX embedding (50ms) → RouterMLP (1ms) → Score
-                                                          ├── < 0.5  → Direct LLM
-                                                          └── ≥ 0.5  → Reasoning LLM
 ```
 
 ## Files
@@ -88,11 +109,13 @@ print(result["response"])      # LLM output with reasoning prompt
 
 ```
 RouterMLP (368K params):
-  Input: 384-dim gte-small embedding
-  ResBlock(384 → 256, dropout=0.35)
-  ResBlock(256 → 128, dropout=0.25)
-  ResBlock(128 → 64,  dropout=0.15)
+  Input: 384-dim gte-small embedding (mean-pooled, L2-normalized)
+  ResBlock(384 → 256, dropout=0.35)  ─── SiLU activation
+  ResBlock(256 → 128, dropout=0.25)  ─── SiLU activation  
+  ResBlock(128 → 64,  dropout=0.15)  ─── SiLU activation
   LayerNorm → Linear(64 → 1) → Sigmoid
+
+Each ResBlock: LayerNorm → Linear → SiLU → Dropout → Linear → + skip connection
 ```
 
 ## Performance
@@ -147,10 +170,6 @@ Mid-size model. Direct prompts stay short.
 
 The router saves 3–6 seconds per direct prompt. On models that follow instructions well (Gemma, Llama, SmolLM), the classifier overhead is under 2% of total latency.
 
-## Costs
-
-Prompt labeling took about 3.8$ in deepseek-v4-flash API credits. 
-
 ## Limitations
 
 - **Binary only.** This model outputs 0 or 1 — it cannot express "context-dependent" (class 2). The 3-class model (`train/train_router_3class.py`) addresses this.
@@ -159,7 +178,7 @@ Prompt labeling took about 3.8$ in deepseek-v4-flash API credits.
 
 - **Qwen 3.5 ignores system prompts via llama.cpp.** Qwen's chat template wraps all output in `<think>` tags regardless of the system prompt. This makes the router ineffective — disabling thinking (`--reasoning off`) globally kills it for reasoning prompts too. Use Gemma or Llama-based models instead.
 
-- **Embedding model quality.** The router is only as good as the embeddings. gte-small (384-dim) works well for English; multilingual prompts may degrade.
+- **Embedding model quality.** The router is only as good as the embeddings. gte-small (384-dim) works well for English; multilingual prompts may degrade. Higher dimension embedding models can fix this, but at the cost of extra latency and overhead. 
 
 - **Single-region training data.** Trained on a subset of WildChat-4.8M, a dataset of chatbot conversations. Retrain with `train/deepseek_classify_prompt.py` on your own data.
 
